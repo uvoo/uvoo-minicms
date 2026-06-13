@@ -20,11 +20,18 @@ body,
 }
 
 .brand {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   color: var(--admin-text);
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -.03em;
+}
+
+.accountButton {
+  margin-bottom: 14px;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .palettes,
@@ -176,12 +183,28 @@ body,
   margin-bottom: 8px;
 }
 
+.menuToolbar {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.menuToolbar .ant-input-affix-wrapper,
+.menuToolbar .ant-input {
+  max-width: 320px;
+}
+
 .menuRow {
   display: grid !important;
-  grid-template-columns: 120px 1fr 1.3fr 1fr 90px 90px auto;
+  grid-template-columns: 120px 1fr 1.3fr 1fr 90px 90px minmax(180px, auto);
   width: 100%;
   align-items: end;
   gap: 12px;
+}
+
+.menuOrderActions {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
 }
 
 .routeGrid .ant-form-item,

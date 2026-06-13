@@ -6,6 +6,7 @@ import "google/protobuf/struct.proto";
 
 service CMSService {
   rpc Health(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc Session(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc ListPages(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc GetPage(google.protobuf.Struct) returns (google.protobuf.Struct);
   rpc SavePage(google.protobuf.Struct) returns (google.protobuf.Struct);

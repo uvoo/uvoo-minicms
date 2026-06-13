@@ -8,6 +8,9 @@ import (
 
 func TestBasicAuthAllowsExpectedCredentials(t *testing.T) {
 	handler := Basic{User: "admin", Pass: "secret"}.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := UserFromContext(r.Context()); got != "admin" {
+			t.Fatalf("expected auth context user admin, got %q", got)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/admin/", nil)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"image"
 	"image/color"
@@ -16,6 +17,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
+	"uvoo-minicms/internal/auth"
 	"uvoo-minicms/internal/db"
 )
 
@@ -133,6 +135,51 @@ func TestValidateNavItemsAcceptsNestedTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected valid tree, got %v", err)
 	}
+}
+
+func TestSessionReturnsUserAndJWTClaims(t *testing.T) {
+	req := connect.NewRequest(&structpb.Struct{})
+	req.Header().Set("X-Auth-Request-Id-Token", testJWT(t, map[string]any{
+		"sub":                "123",
+		"email":              "admin@example.com",
+		"preferred_username": "admin",
+		"ignored":            "not returned",
+	}))
+	req.Header().Set("X-Forwarded-User", "admin@example.com")
+	ctx := auth.ContextWithUser(context.Background(), "admin")
+
+	res, err := (&Service{}).Session(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := res.Msg.AsMap()["session"].(map[string]any)
+	if session["username"] != "admin" {
+		t.Fatalf("expected username admin, got %#v", session["username"])
+	}
+	if session["jwt_source"] != "X-Auth-Request-Id-Token" {
+		t.Fatalf("unexpected jwt source: %#v", session["jwt_source"])
+	}
+	claims := session["jwt_claims"].(map[string]any)
+	if claims["email"] != "admin@example.com" || claims["ignored"] != nil {
+		t.Fatalf("unexpected claims: %#v", claims)
+	}
+	proxy := session["proxy_identity"].(map[string]any)
+	if proxy["user"] != "admin@example.com" {
+		t.Fatalf("unexpected proxy identity: %#v", proxy)
+	}
+}
+
+func testJWT(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	header, err := json.Marshal(map[string]any{"alg": "none", "typ": "JWT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload) + "."
 }
 
 func TestSetSiteImagePreservesPNGTransparency(t *testing.T) {

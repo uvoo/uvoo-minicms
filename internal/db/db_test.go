@@ -92,6 +92,16 @@ func TestGetSettingsCacheReturnsCopies(t *testing.T) {
 	}
 }
 
+func TestDefaultSettingsUseDarkTheme(t *testing.T) {
+	settings := DefaultSettings("Demo")
+	if settings.AdminTheme != "dark" {
+		t.Fatalf("expected dark admin theme, got %q", settings.AdminTheme)
+	}
+	if settings.DefaultTheme != "dark" {
+		t.Fatalf("expected dark public theme, got %q", settings.DefaultTheme)
+	}
+}
+
 func TestGetACLCacheReturnsCopiesAndInvalidatesOnSave(t *testing.T) {
 	store, err := Open(t.TempDir() + "/cms.db")
 	if err != nil {

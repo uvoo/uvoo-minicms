@@ -722,12 +722,12 @@ func DefaultSettings(siteName string) Settings {
 	}
 	return Settings{
 		SiteName:             siteName,
-		DefaultTheme:         "light",
+		DefaultTheme:         "dark",
 		PublicThemeStyle:     "soft",
 		PublicPrimaryColor:   "#386bc0",
 		PublicSecondaryColor: "#64748b",
 		PublicHeaderStyle:    "neutral",
-		AdminTheme:           "light",
+		AdminTheme:           "dark",
 		ThemeStyle:           "soft",
 		AdminPrimaryColor:    "#386bc0",
 		AdminSecondaryColor:  "#64748b",
