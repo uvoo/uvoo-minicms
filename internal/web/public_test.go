@@ -84,8 +84,17 @@ func TestRenderMenuKeepsLinkParentClickable(t *testing.T) {
 
 func TestNavMenuStyleOwnsNavigationBehavior(t *testing.T) {
 	assets := navMenuStyle()
-	if !strings.Contains(assets, `.nav .navToggle{display:none!important}`) {
-		t.Fatalf("expected top desktop nav toggles to be hidden by default, got %s", assets)
+	if !strings.Contains(assets, `.nav .navToggle{display:grid!important}`) {
+		t.Fatalf("expected top nav toggles to be visible on desktop and mobile, got %s", assets)
+	}
+	if !strings.Contains(assets, `.nav .navChevron{display:inline}`) {
+		t.Fatalf("expected top nav section chevrons to be visible, got %s", assets)
+	}
+	if !strings.Contains(assets, `.nav .navGroup:hover>.subnav,.nav .navGroup:focus-within>.subnav{display:none}`) {
+		t.Fatalf("expected top nav hover/focus expansion to be disabled, got %s", assets)
+	}
+	if !strings.Contains(assets, `.nav .navGroup.open>.subnav,.nav .navGroup.open:hover>.subnav,.nav .navGroup.open:focus-within>.subnav{display:flex;flex-direction:column}`) {
+		t.Fatalf("expected top nav submenus to open only from explicit toggle state, got %s", assets)
 	}
 	if !strings.Contains(assets, `.drawerNav .navGroup:hover>.subnav,.drawerNav .navGroup:focus-within>.subnav{display:none}`) {
 		t.Fatalf("expected drawer hover/focus override so collapsed submenus stay closed, got %s", assets)
