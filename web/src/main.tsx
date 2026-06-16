@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App as AntApp, Button, Card, ConfigProvider, Dropdown, Form, Input, Layout, List, Modal, Popconfirm, Select, Space, Switch, Tabs, Typography, Upload, message, theme } from 'antd'
 import type { MenuProps, UploadProps } from 'antd'
 import './style.css'
-import { api, ACLRule, ACLSettings, Asset, ImportOptions, ImportResult, NavItem, Page, PageRevision, SiteSettings, ThemeHistory } from './api'
+import { api, ACLRule, ACLSettings, Asset, ImportOptions, ImportResult, NavItem, Page, PageRevision, SessionInfo, SiteSettings, ThemeHistory } from './api'
 
 const MdBodyEditor = React.lazy(() => import('./MdBodyEditor'))
 const adminThemeStorageKey = 'uvoo-minicms-admin-theme'
@@ -56,6 +56,48 @@ function menuParentOptions(items: NavItem[], rowIndex: number) {
     .filter((item, i) => i !== rowIndex && item?.id && (!currentID || !isMenuDescendant(items, item.id, currentID)))
     .map(item => ({ label: item.label || item.url || item.id, value: item.id }))
 }
+function menuSearchValue(item?: NavItem) {
+  if (!item) return ''
+  return [item.label, item.url, item.id, item.parent_id, item.type].filter(Boolean).join(' ').toLowerCase()
+}
+function menuSortLabel(item: NavItem) {
+  return (item.label || item.url || item.id || '').trim().toLocaleLowerCase()
+}
+function sortMenuAlphabetically(items: NavItem[]) {
+  const rows = items.map((item, index) => ({ item, index }))
+  const children = new Map<string, typeof rows>()
+  rows.forEach(row => {
+    const parentID = row.item.parent_id || ''
+    children.set(parentID, [...(children.get(parentID) || []), row])
+  })
+  children.forEach(list => list.sort((a, b) => {
+    const byLabel = menuSortLabel(a.item).localeCompare(menuSortLabel(b.item))
+    return byLabel || a.index - b.index
+  }))
+  const out: NavItem[] = []
+  const seen = new Set<string>()
+  const append = (parentID: string) => {
+    for (const row of children.get(parentID) || []) {
+      out.push(row.item)
+      if (row.item.id && !seen.has(row.item.id)) {
+        seen.add(row.item.id)
+        append(row.item.id)
+      }
+    }
+  }
+  append('')
+  for (const row of rows) {
+    if (!out.includes(row.item)) out.push(row.item)
+  }
+  return out
+}
+function siblingMenuIndex(items: NavItem[], index: number, direction: -1 | 1) {
+  const parentID = items[index]?.parent_id || ''
+  for (let i = index + direction; i >= 0 && i < items.length; i += direction) {
+    if ((items[i]?.parent_id || '') === parentID) return i
+  }
+  return -1
+}
 function hexToRgb(hex:string) {
   const cleaned = hex.replace('#', '')
   const value = /^[0-9a-fA-F]{6}$/.test(cleaned) ? cleaned : '386bc0'
@@ -76,10 +118,14 @@ function assetMarkdown(asset: Asset) {
   return isImage(asset.url) ? `![${asset.name}](${asset.url})` : `[${asset.name}](${asset.url})`
 }
 function storedAdminDark() {
+  return storedAdminTheme() !== 'light'
+}
+function storedAdminTheme(): 'light'|'dark'|'' {
   try {
-    return localStorage.getItem(adminThemeStorageKey) === 'dark'
+    const value = localStorage.getItem(adminThemeStorageKey)
+    return value === 'light' || value === 'dark' ? value : ''
   } catch {
-    return false
+    return ''
   }
 }
 function rememberAdminTheme(dark: boolean) {
@@ -88,6 +134,12 @@ function rememberAdminTheme(dark: boolean) {
   } catch {
     // Ignore private browsing or storage policy failures.
   }
+}
+function displayValue(value: unknown) {
+  if (Array.isArray(value)) return value.join(', ')
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
 }
 function readFileData(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -117,6 +169,7 @@ function Root() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [acl, setACL] = useState<ACLSettings>(emptyACL)
   const [themeHistory, setThemeHistory] = useState<ThemeHistory[]>([])
+  const [session, setSession] = useState<SessionInfo | null>(null)
   const [active, setActive] = useState<Page | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -133,7 +186,7 @@ function Root() {
   const [customSecondary, setCustomSecondary] = useState('#64748b')
   const [adminDark, setAdminDark] = useState(storedAdminDark)
   const [themeStyle, setThemeStyle] = useState<ThemeStyle>('soft')
-  const [publicTheme, setPublicTheme] = useState<'light'|'dark'>('light')
+  const [publicTheme, setPublicTheme] = useState<'light'|'dark'>('dark')
   const [publicThemeStyle, setPublicThemeStyle] = useState<ThemeStyle>('soft')
   const [publicPrimary, setPublicPrimary] = useState('#386bc0')
   const [publicSecondary, setPublicSecondary] = useState('#64748b')
@@ -153,6 +206,7 @@ function Root() {
   const [runningImport, setRunningImport] = useState(false)
   const [identityUploading, setIdentityUploading] = useState<IdentityKind | ''>('')
   const [identitySourceURL, setIdentitySourceURL] = useState<Record<IdentityKind, string>>({ logo: '', favicon: '' })
+  const [menuSearch, setMenuSearch] = useState('')
   const [form] = Form.useForm()
   const [settingsForm] = Form.useForm<SiteSettings>()
   const md = Form.useWatch('markdown', form) ?? ''
@@ -194,6 +248,29 @@ function Root() {
     '--admin-shadow': themeStyle === 'material' ? (adminDark ? '#00000070' : '#17203326') : (adminDark ? '#00000055' : '#17203312')
   } as React.CSSProperties
   const imageSuggestions = assets.filter(asset => isImage(asset.url)).map(asset => asset.url)
+  const menuSearchQuery = menuSearch.trim().toLowerCase()
+
+  function setAdminThemeMode(mode: 'light'|'dark') {
+    const dark = mode === 'dark'
+    setAdminDark(dark)
+    rememberAdminTheme(dark)
+    settingsForm.setFieldValue('admin_theme', mode)
+  }
+  function setMenuItems(items: NavItem[]) {
+    settingsForm.setFieldValue('menu', items)
+  }
+  function sortCurrentMenuAlphabetically() {
+    setMenuItems(sortMenuAlphabetically((settingsForm.getFieldValue('menu') || []) as NavItem[]))
+  }
+  function moveMenuItem(index: number, direction: -1 | 1) {
+    const items = [...((settingsForm.getFieldValue('menu') || []) as NavItem[])]
+    const swapIndex = siblingMenuIndex(items, index, direction)
+    if (swapIndex < 0) return
+    const current = items[index]
+    items[index] = items[swapIndex]
+    items[swapIndex] = current
+    setMenuItems(items)
+  }
 
   async function loadPages() {
     const r = await api.listPages()
@@ -202,9 +279,10 @@ function Root() {
   }
   async function loadSettings() {
     const r = await api.getSettings()
-    settingsForm.setFieldsValue(r.settings)
-    setAdminDark(r.settings.admin_theme === 'dark')
-    rememberAdminTheme(r.settings.admin_theme === 'dark')
+    const savedAdminTheme = r.settings.admin_theme === 'light' ? 'light' : 'dark'
+    const adminTheme = storedAdminTheme() || savedAdminTheme
+    settingsForm.setFieldsValue({ ...r.settings, admin_theme: adminTheme })
+    setAdminThemeMode(adminTheme)
     setCustomPrimary(r.settings.admin_primary_color || '#386bc0')
     setCustomSecondary(r.settings.admin_secondary_color || '#64748b')
     if (r.settings.admin_palette) setPalette(r.settings.admin_palette)
@@ -216,6 +294,10 @@ function Root() {
     setPublicHeaderStyle(r.settings.public_header_style || 'neutral')
     setFooterEnabled(r.settings.footer_enabled !== false)
     setFooterMarkdown(r.settings.footer_markdown || defaultFooter(r.settings.site_name))
+  }
+  async function loadSession() {
+    const r = await api.session()
+    setSession(r.session)
   }
   async function loadAssets() {
     setLoadingAssets(true)
@@ -372,7 +454,7 @@ function Root() {
     setACL(current => ({ ...current, rules: current.rules.filter((_, i) => i !== index) }))
   }
   function applyThemeHistory(theme: ThemeHistory) {
-    setAdminDark(theme.admin_theme === 'dark')
+    setAdminThemeMode(theme.admin_theme === 'dark' ? 'dark' : 'light')
     setThemeStyle(theme.theme_style || 'soft')
     setPalette(theme.admin_palette || 'custom')
     setCustomPrimary(theme.admin_primary_color)
@@ -460,6 +542,7 @@ function Root() {
   }
 
   useEffect(() => {
+    loadSession().catch(e => message.error(e.message))
     loadPages().catch(e => message.error(e.message))
     loadSettings().catch(e => message.error(e.message))
     loadAssets().catch(e => message.error(e.message))
@@ -570,14 +653,34 @@ function Root() {
   }
 
   const mdEditorKey = [active?.slug || 'new', active?.updated_at || '', editorRev].join('-')
+  const sessionMenuItems: MenuProps['items'] = [
+    { key: 'user', label: <div><Typography.Text type="secondary">Username</Typography.Text><br /><Typography.Text code>{session?.username || 'unknown'}</Typography.Text></div> },
+    { key: 'auth', label: <div><Typography.Text type="secondary">Auth</Typography.Text><br /><Typography.Text code>{session?.auth_scheme || 'basic'}</Typography.Text></div> },
+    ...(session?.proxy_identity ? Object.entries(session.proxy_identity).map(([key, value]) => ({
+      key: `proxy-${key}`,
+      label: <div><Typography.Text type="secondary">{key}</Typography.Text><br /><Typography.Text code>{displayValue(value)}</Typography.Text></div>
+    })) : []),
+    ...(session?.jwt_claims ? [
+      { key: 'jwt-source', label: <div><Typography.Text type="secondary">JWT source</Typography.Text><br /><Typography.Text code>{session.jwt_source}</Typography.Text></div> },
+      ...Object.entries(session.jwt_claims).map(([key, value]) => ({
+        key: `jwt-${key}`,
+        label: <div><Typography.Text type="secondary">{key}</Typography.Text><br /><Typography.Text code>{displayValue(value)}</Typography.Text></div>
+      }))
+    ] : [{ key: 'no-jwt', disabled: true, label: 'No JWT claims on this request' }])
+  ]
 
   return <ConfigProvider theme={cfg} getPopupContainer={trigger => trigger?.parentElement || document.body}><AntApp><Layout className={`layout themeStyle-${themeStyle}`} style={adminVars}>
     <Layout.Sider className="sider" width={310} breakpoint="lg" collapsedWidth={0}>
       <div className="brand">Uvoo-MiniCMS</div>
+      <Dropdown menu={{ items: sessionMenuItems }} trigger={['click']}>
+        <Button className="accountButton" block>
+          {session?.username || 'Signed in'}
+        </Button>
+      </Dropdown>
       <Space wrap className="palettes">
         {Object.keys(palettes).map(p => <Button key={p} size="small" type={p===palette?'primary':'default'} onClick={() => setPalette(p as Palette)}>{p}</Button>)}
         <Button size="small" type={palette==='custom'?'primary':'default'} onClick={() => { setPalette('custom'); settingsForm.setFieldValue('admin_palette', 'custom') }}>custom</Button>
-        <Switch checkedChildren="Dark" unCheckedChildren="Light" checked={adminDark} onChange={checked => { setAdminDark(checked); settingsForm.setFieldValue('admin_theme', checked ? 'dark' : 'light') }} />
+        <Switch checkedChildren="Dark" unCheckedChildren="Light" checked={adminDark} onChange={checked => setAdminThemeMode(checked ? 'dark' : 'light')} />
       </Space>
       <Space direction="vertical" style={{ width: '100%' }}>
         <Button block type="primary" onClick={() => newPage('page')}>New page</Button>
@@ -657,7 +760,7 @@ function Root() {
           <MediaBrowser assets={assets} loading={loadingAssets} onInsert={insertAsset} onDelete={confirmDeleteAsset} onRefresh={() => loadAssets().catch((e:any) => message.error(e.message))} uploadProps={mediaUploadProps} />
         </Card> },
         { key:'site', label:'Site', children:<Card className="editorCard">
-          <Form form={settingsForm} layout="vertical" onFinish={() => saveSettings()} initialValues={{site_name:'Uvoo-MiniCMS', default_theme:'light', public_theme_style:'soft', public_primary_color:'#386bc0', public_secondary_color:'#64748b', public_header_style:'neutral', admin_theme:'light', theme_style:'soft', admin_primary_color:'#386bc0', admin_secondary_color:'#64748b', admin_palette:'slate', nav_layout:'top', footer_markdown:'', logo_enabled:true, favicon_enabled:true, menu_enabled:true, footer_enabled:true, theme_toggle_enabled:true, icons_enabled:true, search_enabled:true, blog_enabled:false, blog_path:'/blog', blog_title:'Blog', blog_menu_enabled:true, blog_posts_per_page:20, revision_history_limit:0, menu:[{id:'home', type:'link', parent_id:'', label:'Home', url:'/', external:false, enabled:true}]}}>
+          <Form form={settingsForm} layout="vertical" onFinish={() => saveSettings()} initialValues={{site_name:'Uvoo-MiniCMS', default_theme:'dark', public_theme_style:'soft', public_primary_color:'#386bc0', public_secondary_color:'#64748b', public_header_style:'neutral', admin_theme:'dark', theme_style:'soft', admin_primary_color:'#386bc0', admin_secondary_color:'#64748b', admin_palette:'slate', nav_layout:'top', footer_markdown:'', logo_enabled:true, favicon_enabled:true, menu_enabled:true, footer_enabled:true, theme_toggle_enabled:true, icons_enabled:true, search_enabled:true, blog_enabled:false, blog_path:'/blog', blog_title:'Blog', blog_menu_enabled:true, blog_posts_per_page:20, revision_history_limit:0, menu:[{id:'home', type:'link', parent_id:'', label:'Home', url:'/', external:false, enabled:true}]}}>
             <Space className="topbar" align="start">
               <div>
                 <Typography.Title level={3}>Site settings</Typography.Title>
@@ -715,7 +818,12 @@ function Root() {
             </Space>
             <Typography.Title level={4}>Top menu</Typography.Title>
             <Form.List name="menu">{(fields, { add, remove }) => <>
-              {fields.map(field => <Space key={field.key} className="menuRow" align="start">
+              <Space className="menuToolbar" wrap>
+                <Input allowClear placeholder="Search menu items" value={menuSearch} onChange={e => setMenuSearch(e.target.value)} />
+                <Button onClick={sortCurrentMenuAlphabetically}>Sort A-Z</Button>
+                <Button onClick={() => add({id:newID(), type:'link', parent_id:'', label:'', url:'/', external:false, enabled:true})}>Add menu item</Button>
+              </Space>
+              {fields.filter(field => !menuSearchQuery || menuSearchValue(menuItems?.[field.name]).includes(menuSearchQuery)).map(field => <Space key={field.key} className="menuRow" align="start">
                 <Form.Item {...field} name={[field.name, 'id']} hidden><Input /></Form.Item>
                 <Form.Item {...field} name={[field.name, 'type']} label="Type"><Select options={[{label:'Link', value:'link'}, {label:'Section', value:'section'}]} /></Form.Item>
                 <div>
@@ -735,9 +843,16 @@ function Root() {
                   {({ getFieldValue }) => <Form.Item {...field} name={[field.name, 'external']} label="External" valuePropName="checked"><Switch disabled={getFieldValue(['menu', field.name, 'type']) === 'section'} /></Form.Item>}
                 </Form.Item>
                 <Form.Item {...field} name={[field.name, 'enabled']} label="Enabled" valuePropName="checked"><Switch /></Form.Item>
-                <Button danger onClick={() => remove(field.name)}>Remove</Button>
+                <div className="menuOrderActions">
+                  <Typography.Text type="secondary">Order</Typography.Text>
+                  <Space.Compact>
+                    <Button aria-label="Move menu item up" disabled={siblingMenuIndex(menuItems || [], field.name, -1) < 0} onClick={() => moveMenuItem(field.name, -1)}>Up</Button>
+                    <Button aria-label="Move menu item down" disabled={siblingMenuIndex(menuItems || [], field.name, 1) < 0} onClick={() => moveMenuItem(field.name, 1)}>Down</Button>
+                  </Space.Compact>
+                  <Button danger onClick={() => remove(field.name)}>Remove</Button>
+                </div>
               </Space>)}
-              <Button onClick={() => add({id:newID(), type:'link', parent_id:'', label:'', url:'/', external:false, enabled:true})}>Add menu item</Button>
+              {menuSearchQuery && fields.every(field => !menuSearchValue(menuItems?.[field.name]).includes(menuSearchQuery)) && <Typography.Text type="secondary">No menu items match this search.</Typography.Text>}
             </>}</Form.List>
           </Form>
         </Card> },
@@ -892,7 +1007,7 @@ function Root() {
           <Space wrap className="themePicker">
             {Object.keys(palettes).map(p => <Button key={p} type={p===palette?'primary':'default'} onClick={() => { setPalette(p as Palette); settingsForm.setFieldValue('admin_palette', p) }}>{p}</Button>)}
             <Button type={palette==='custom'?'primary':'default'} onClick={() => { setPalette('custom'); settingsForm.setFieldValue('admin_palette', 'custom') }}>Custom</Button>
-            <Switch checkedChildren="Dark" unCheckedChildren="Light" checked={adminDark} onChange={checked => { setAdminDark(checked); settingsForm.setFieldValue('admin_theme', checked ? 'dark' : 'light') }} />
+            <Switch checkedChildren="Dark" unCheckedChildren="Light" checked={adminDark} onChange={checked => setAdminThemeMode(checked ? 'dark' : 'light')} />
           </Space>
           {themeHistory.length > 0 && <div className="themeHistory">
             <Typography.Text strong>Recent themes</Typography.Text>
@@ -906,7 +1021,7 @@ function Root() {
             <Typography.Title level={4}>Admin theme</Typography.Title>
             <div className="themeControlGrid">
               <Form.Item label="Default mode">
-                <Select className="themeSelect" value={adminDark ? 'dark' : 'light'} onChange={value => { setAdminDark(value === 'dark'); settingsForm.setFieldValue('admin_theme', value) }} options={[{label:'Light', value:'light'}, {label:'Dark', value:'dark'}]} />
+                <Select className="themeSelect" value={adminDark ? 'dark' : 'light'} onChange={(value: 'light'|'dark') => setAdminThemeMode(value)} options={[{label:'Light', value:'light'}, {label:'Dark', value:'dark'}]} />
               </Form.Item>
               <Form.Item label="UI style">
                 <Select className="themeSelect" value={themeStyle} onChange={value => { setThemeStyle(value); settingsForm.setFieldValue('theme_style', value) }} options={themeStyleOptions} />

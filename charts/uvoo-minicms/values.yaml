@@ -4,7 +4,7 @@ deploymentStrategy:
   type: Recreate
 
 image:
-  repository: ghcr.io/jeremybusk/uvoo-minicms
+  repository: ghcr.io/uvoo/uvoo-minicms
   pullPolicy: Always
   tag: latest
 

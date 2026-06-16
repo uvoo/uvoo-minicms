@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"net"
@@ -10,6 +11,8 @@ import (
 
 type Basic struct{ User, Pass string }
 
+type userContextKey struct{}
+
 func (b Basic) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
@@ -18,8 +21,19 @@ func (b Basic) Middleware(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(ContextWithUser(r.Context(), u)))
 	})
+}
+
+func UserFromContext(ctx context.Context) string {
+	if user, ok := ctx.Value(userContextKey{}).(string); ok {
+		return user
+	}
+	return ""
+}
+
+func ContextWithUser(ctx context.Context, user string) context.Context {
+	return context.WithValue(ctx, userContextKey{}, user)
 }
 
 func constantTimeStringEqual(a, b string) bool {

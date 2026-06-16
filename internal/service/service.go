@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -25,6 +26,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/structpb"
+	"uvoo-minicms/internal/auth"
 	"uvoo-minicms/internal/db"
 	"uvoo-minicms/internal/importer"
 	"uvoo-minicms/internal/netguard"
@@ -77,6 +79,27 @@ func number(m map[string]any, k string) int {
 func (s *Service) Health(ctx context.Context, _ *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
 	return ok(map[string]any{"ok": true, "time": time.Now().UTC().Format(time.RFC3339)})
 }
+func (s *Service) Session(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	username := auth.UserFromContext(ctx)
+	if username == "" {
+		username, _, _ = basicAuth(req)
+	}
+	info := map[string]any{
+		"username":    username,
+		"auth_scheme": authScheme(req),
+	}
+	if token, source := bearerToken(req); token != "" {
+		if claims, err := jwtClaims(token); err == nil {
+			info["jwt_source"] = source
+			info["jwt_claims"] = claims
+		}
+	}
+	proxy := proxyIdentity(req)
+	if len(proxy) > 0 {
+		info["proxy_identity"] = proxy
+	}
+	return ok(map[string]any{"session": info})
+}
 func (s *Service) ListPages(ctx context.Context, _ *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
 	pages, err := s.Store.ListPages(ctx)
 	if err != nil {
@@ -87,6 +110,84 @@ func (s *Service) ListPages(ctx context.Context, _ *connect.Request[structpb.Str
 		items = append(items, pageMap(p, false))
 	}
 	return ok(map[string]any{"pages": items})
+}
+
+func authScheme(req *connect.Request[structpb.Struct]) string {
+	authHeader := strings.TrimSpace(req.Header().Get("Authorization"))
+	if authHeader == "" {
+		return "basic"
+	}
+	scheme, _, ok := strings.Cut(authHeader, " ")
+	if !ok {
+		return strings.ToLower(authHeader)
+	}
+	return strings.ToLower(scheme)
+}
+
+func basicAuth(req *connect.Request[structpb.Struct]) (string, string, bool) {
+	authHeader := strings.TrimSpace(req.Header().Get("Authorization"))
+	scheme, encoded, ok := strings.Cut(authHeader, " ")
+	if !ok || !strings.EqualFold(scheme, "Basic") {
+		return "", "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil {
+		return "", "", false
+	}
+	user, pass, ok := strings.Cut(string(decoded), ":")
+	return user, pass, ok
+}
+
+func bearerToken(req *connect.Request[structpb.Struct]) (string, string) {
+	authHeader := strings.TrimSpace(req.Header().Get("Authorization"))
+	if scheme, token, ok := strings.Cut(authHeader, " "); ok && strings.EqualFold(scheme, "Bearer") {
+		return strings.TrimSpace(token), "Authorization"
+	}
+	for _, header := range []string{"X-Auth-Request-Access-Token", "X-Forwarded-Access-Token", "X-Auth-Request-Id-Token", "X-Forwarded-Id-Token"} {
+		if token := strings.TrimSpace(req.Header().Get(header)); token != "" {
+			return token, header
+		}
+	}
+	return "", ""
+}
+
+func jwtClaims(token string) (map[string]any, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return nil, errors.New("invalid jwt")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	for _, key := range []string{"iss", "sub", "aud", "exp", "iat", "nbf", "email", "email_verified", "name", "preferred_username", "groups", "roles", "scope"} {
+		if value, ok := claims[key]; ok {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+func proxyIdentity(req *connect.Request[structpb.Struct]) map[string]any {
+	headers := map[string]string{
+		"user":               "X-Forwarded-User",
+		"email":              "X-Forwarded-Email",
+		"preferred_username": "X-Forwarded-Preferred-Username",
+		"auth_request_user":  "X-Auth-Request-User",
+		"auth_request_email": "X-Auth-Request-Email",
+	}
+	out := map[string]any{}
+	for key, header := range headers {
+		if value := strings.TrimSpace(req.Header().Get(header)); value != "" {
+			out[key] = value
+		}
+	}
+	return out
 }
 func (s *Service) GetPage(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
 	p, err := s.Store.GetPage(ctx, str(fields(req), "slug"))

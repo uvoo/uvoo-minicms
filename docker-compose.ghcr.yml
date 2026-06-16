@@ -1,6 +1,6 @@
 services:
   uvoo-minicms:
-    image: ${CMS_IMAGE:-ghcr.io/jeremybusk/uvoo-minicms:latest}
+    image: ${CMS_IMAGE:-ghcr.io/uvoo/uvoo-minicms:latest}
     ports:
       - "8080:8080"
     env_file: .env

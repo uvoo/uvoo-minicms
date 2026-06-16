@@ -12,6 +12,7 @@ const CMSServiceName = "cms.v1.CMSService"
 
 const (
 	CMSServiceHealthProcedure            = "/cms.v1.CMSService/Health"
+	CMSServiceSessionProcedure           = "/cms.v1.CMSService/Session"
 	CMSServiceListPagesProcedure         = "/cms.v1.CMSService/ListPages"
 	CMSServiceGetPageProcedure           = "/cms.v1.CMSService/GetPage"
 	CMSServiceSavePageProcedure          = "/cms.v1.CMSService/SavePage"
@@ -32,6 +33,7 @@ const (
 
 type CMSServiceHandler interface {
 	Health(context.Context, *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error)
+	Session(context.Context, *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error)
 	ListPages(context.Context, *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error)
 	GetPage(context.Context, *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error)
 	SavePage(context.Context, *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error)
@@ -53,6 +55,7 @@ type CMSServiceHandler interface {
 func NewCMSServiceHandler(svc CMSServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	mux := http.NewServeMux()
 	mux.Handle(CMSServiceHealthProcedure, connect.NewUnaryHandler(CMSServiceHealthProcedure, svc.Health, opts...))
+	mux.Handle(CMSServiceSessionProcedure, connect.NewUnaryHandler(CMSServiceSessionProcedure, svc.Session, opts...))
 	mux.Handle(CMSServiceListPagesProcedure, connect.NewUnaryHandler(CMSServiceListPagesProcedure, svc.ListPages, opts...))
 	mux.Handle(CMSServiceGetPageProcedure, connect.NewUnaryHandler(CMSServiceGetPageProcedure, svc.GetPage, opts...))
 	mux.Handle(CMSServiceSavePageProcedure, connect.NewUnaryHandler(CMSServiceSavePageProcedure, svc.SavePage, opts...))

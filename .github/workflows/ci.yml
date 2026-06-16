@@ -28,3 +28,5 @@ jobs:
         run: make web
       - name: License check
         run: make license-check
+      - name: Docker image smoke test
+        run: make docker-smoke

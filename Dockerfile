@@ -11,7 +11,10 @@ RUN apk add --no-cache build-base git
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN GOPROXY=direct go mod download
-COPY . .
+COPY cmd ./cmd
+COPY cmsv1connect ./cmsv1connect
+COPY internal ./internal
+COPY proto ./proto
 COPY --from=web /src/web/dist ./web/dist
 RUN CGO_ENABLED=1 go build -trimpath -ldflags='-s -w' -o /out/uvoo-minicms ./cmd/uvoo-minicms
 

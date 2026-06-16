@@ -83,6 +83,13 @@ export type ThemeHistory = {
   public_header_style:'neutral'|'accent-line'|'accent-bg'
   updated_at:string
 }
+export type SessionInfo = {
+  username:string
+  auth_scheme:string
+  jwt_source?:string
+  jwt_claims?:Record<string, unknown>
+  proxy_identity?:Record<string, unknown>
+}
 export type ImportPage = {
   slug:string
   path:string
@@ -128,6 +135,7 @@ async function rpc<T>(name: string, body: Record<string, unknown> = {}): Promise
   return r.json()
 }
 export const api = {
+  session: () => rpc<{session:SessionInfo}>('Session'),
   listPages: () => rpc<{pages:Page[]}>('ListPages'),
   getPage: (slug:string) => rpc<{page:Page}>('GetPage', { slug }),
   savePage: (page: Partial<Page>) => rpc<{page:Page}>('SavePage', page),

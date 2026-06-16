@@ -12,6 +12,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,13 +21,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Prepare image metadata inputs
+        id: vars
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: echo "short_sha=${HEAD_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -34,9 +43,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=sha,format=short
-            latest
+            type=raw,value=${{ github.event.workflow_run.head_branch }}
+            type=raw,value=sha-${{ steps.vars.outputs.short_sha }}
+            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == github.event.repository.default_branch }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

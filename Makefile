@@ -1,4 +1,4 @@
-.PHONY: dev build license-check package package-linux release run web web-install docker-up docker-build docker-down
+.PHONY: dev build license-check package package-linux release run web web-install docker-up docker-build docker-smoke docker-down
 
 web:
 	cd web && npm ci && npm run build
@@ -31,6 +31,9 @@ dev:
 
 docker-build:
 	docker compose build uvoo-minicms
+
+docker-smoke:
+	bash scripts/docker-smoke.sh
 
 docker-up:
 	docker compose up -d --build --remove-orphans uvoo-minicms
