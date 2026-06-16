@@ -169,7 +169,7 @@ docker run -d --name uvoo-minicms \
   -e CMS_UPLOAD_DIR=/data/uploads \
   -e CMS_WEB_ROOT=/app/web/dist \
   -v "$PWD/data:/data" \
-  ghcr.io/jeremybusk/uvoo-minicms:latest
+  ghcr.io/uvoo/uvoo-minicms:latest
 ```
 
 The `.env` file is optional. You can pass the required password directly instead:
@@ -177,10 +177,10 @@ The `.env` file is optional. You can pass the required password directly instead
 ```bash
 docker run --rm -p 8080:8080 \
   -e CMS_ADMIN_PASS='use-a-long-random-password' \
-  ghcr.io/jeremybusk/uvoo-minicms:latest
+  ghcr.io/uvoo/uvoo-minicms:latest
 ```
 
-Docker options must come before the image name. In `docker run ghcr.io/jeremybusk/uvoo-minicms -e CMS_ADMIN_PASS=foo`, the `-e` is passed to Uvoo-MiniCMS instead of Docker, so the app reports `flag provided but not defined: -e`.
+Docker options must come before the image name. In `docker run ghcr.io/uvoo/uvoo-minicms -e CMS_ADMIN_PASS=foo`, the `-e` is passed to Uvoo-MiniCMS instead of Docker, so the app reports `flag provided but not defined: -e`.
 
 Replace `latest` with a branch, release, or short-SHA tag from GHCR for repeatable deployments.
 
@@ -195,7 +195,7 @@ docker compose -f docker-compose.ghcr.yml up -d
 You can pin a different image tag without editing the file:
 
 ```bash
-CMS_IMAGE=ghcr.io/jeremybusk/uvoo-minicms:sha-abc1234 \
+CMS_IMAGE=ghcr.io/uvoo/uvoo-minicms:sha-abc1234 \
   docker compose -f docker-compose.ghcr.yml up -d
 ```
 
@@ -221,7 +221,7 @@ The Makefile also includes `make docker-up`, `make docker-build`, and `make dock
 ## Helm / Kubernetes
 
 A Helm chart is available in `charts/uvoo-minicms`. It deploys the app with a `PersistentVolumeClaim`, `ClusterIP` Service, generated admin credentials, and an HTTPS Ingress using the `nginx` ingress class by default.
-The chart defaults to `ghcr.io/jeremybusk/uvoo-minicms:latest` with `image.pullPolicy=Always`; set `image.tag` to a release, branch, or short-SHA tag for repeatable deployments.
+The chart defaults to `ghcr.io/uvoo/uvoo-minicms:latest` with `image.pullPolicy=Always`; set `image.tag` to a release, branch, or short-SHA tag for repeatable deployments.
 
 ```bash
 helm upgrade --install cms ./charts/uvoo-minicms \
