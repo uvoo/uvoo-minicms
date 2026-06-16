@@ -1,0 +1,3 @@
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.sqlite.allowUnsafeMultiReplica) -}}
+{{- fail "Uvoo-MiniCMS uses a single SQLite database file. Keep replicaCount=1, or set sqlite.allowUnsafeMultiReplica=true only if you have deliberately accepted the risks of concurrent SQLite access on shared storage." -}}
+{{- end -}}

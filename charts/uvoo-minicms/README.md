@@ -14,7 +14,37 @@ The chart defaults to `ghcr.io/uvoo/uvoo-minicms:latest` with `image.pullPolicy=
 
 The chart generates and preserves an admin password unless `admin.password` or `admin.existingSecret` is set.
 
-The default deployment strategy is `Recreate` because Uvoo-MiniCMS uses SQLite on a persistent volume. Keep `replicaCount: 1` unless you have deliberately moved storage to a setup that is safe for concurrent writers.
+The default deployment strategy is `Recreate` because Uvoo-MiniCMS uses SQLite on a persistent volume. Keep `replicaCount: 1` for normal installs. This avoids Kubernetes `Multi-Attach` errors with the default `ReadWriteOnce` PVC and avoids concurrent writes to one SQLite database file.
+
+## SQLite and Replicas
+
+SQLite is best treated as single-writer application storage in Kubernetes. The preferred deployment is:
+
+```yaml
+replicaCount: 1
+deploymentStrategy:
+  type: Recreate
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+```
+
+Do not set `replicaCount: 2` with the default PVC. A `ReadWriteOnce` volume can only attach to one node at a time, so Kubernetes may report `Multi-Attach error for volume ... Volume is already used by pod`.
+
+If you deliberately accept the risk, you can force multiple replicas only with storage that supports shared mounts and correct cross-node file locking, such as a tested `ReadWriteMany` filesystem:
+
+```yaml
+replicaCount: 2
+sqlite:
+  allowUnsafeMultiReplica: true
+persistence:
+  accessModes:
+    - ReadWriteMany
+  storageClass: your-rwx-storage-class
+```
+
+This is not recommended as an HA design for SQLite. Expect writer contention, and test page saves, uploads, imports, and admin changes under concurrent traffic before using it. For high availability without changing databases, prefer one application replica with reliable persistent storage, fast backups, and Kubernetes restarting the pod on failure.
 
 ## TLS Options
 

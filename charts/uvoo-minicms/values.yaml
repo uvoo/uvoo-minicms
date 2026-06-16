@@ -3,6 +3,12 @@ replicaCount: 1
 deploymentStrategy:
   type: Recreate
 
+sqlite:
+  # Uvoo-MiniCMS stores application state in one SQLite database file.
+  # Keep this false for normal installs. Multiple replicas require storage
+  # with correct cross-node file locking and still risk writer contention.
+  allowUnsafeMultiReplica: false
+
 image:
   repository: ghcr.io/uvoo/uvoo-minicms
   pullPolicy: Always
