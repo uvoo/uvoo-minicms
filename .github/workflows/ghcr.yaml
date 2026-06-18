@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       - name: Prepare image metadata inputs
         id: vars
@@ -30,7 +31,43 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: echo "short_sha=${HEAD_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve publish target
+        id: publish
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          HEAD_REF: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+
+          publish=false
+          branch_tag=""
+          version_tag=""
+
+          if [ "$HEAD_REF" = "$DEFAULT_BRANCH" ]; then
+            publish=true
+            branch_tag="$DEFAULT_BRANCH"
+          fi
+
+          if [[ "$HEAD_REF" =~ ^v[0-9] ]]; then
+            version_tag="$HEAD_REF"
+          else
+            version_tag="$(git tag --points-at "$HEAD_SHA" | grep -E '^v[0-9]' | sort -V | tail -n 1 || true)"
+          fi
+
+          if [ -n "$version_tag" ]; then
+            publish=true
+          fi
+
+          {
+            echo "publish=$publish"
+            echo "branch_tag=$branch_tag"
+            echo "version_tag=$version_tag"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Log in to the Container registry
+        if: steps.publish.outputs.publish == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -38,16 +75,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
+        if: steps.publish.outputs.publish == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ github.event.workflow_run.head_branch }}
+            type=raw,value=${{ steps.publish.outputs.branch_tag }},enable=${{ steps.publish.outputs.branch_tag != '' }}
             type=raw,value=sha-${{ steps.vars.outputs.short_sha }}
-            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == github.event.repository.default_branch }}
+            type=raw,value=latest,enable=${{ steps.publish.outputs.branch_tag == github.event.repository.default_branch }}
+            type=raw,value=${{ steps.publish.outputs.version_tag }},enable=${{ steps.publish.outputs.version_tag != '' }}
 
       - name: Build and push Docker image
+        if: steps.publish.outputs.publish == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .

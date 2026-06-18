@@ -43,6 +43,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-admin" (include "uvoo-minicms.fullname" .)) .Values.admin.existingSecret -}}
 {{- end -}}
 
+{{- define "uvoo-minicms.writerServiceName" -}}
+{{- printf "%s-writer" (include "uvoo-minicms.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "uvoo-minicms.readerDeploymentName" -}}
+{{- printf "%s-readers" (include "uvoo-minicms.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "uvoo-minicms.tlsSecretName" -}}
 {{- default (printf "%s-tls" (include "uvoo-minicms.fullname" .)) .Values.ingress.tls.secretName -}}
 {{- end -}}

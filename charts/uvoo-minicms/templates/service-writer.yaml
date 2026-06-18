@@ -1,0 +1,19 @@
+{{- if .Values.ha.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "uvoo-minicms.writerServiceName" . }}
+  labels:
+    {{- include "uvoo-minicms.labels" . | nindent 4 }}
+    app.kubernetes.io/component: writer
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "uvoo-minicms.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: writer
+{{- end }}

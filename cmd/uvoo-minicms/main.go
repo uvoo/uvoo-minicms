@@ -27,7 +27,13 @@ func main() {
 	cfg := config.Load()
 	must(validateRuntimeSecurity(cfg))
 	must(os.MkdirAll(cfg.UploadDir, 0750))
-	store, err := db.Open(cfg.DBPath)
+	var store *db.Store
+	var err error
+	if cfg.ReadOnly {
+		store, err = db.OpenReadOnly(cfg.DBPath)
+	} else {
+		store, err = db.Open(cfg.DBPath)
+	}
 	must(err)
 	ipf, err := auth.NewIPFilter(cfg.AllowedCIDRs, cfg.DeniedCIDRs, cfg.TrustProxyHeaders)
 	must(err)
@@ -35,7 +41,7 @@ func main() {
 	must(err)
 	defer geof.Close()
 
-	svc := &service.Service{Store: store, UploadDir: cfg.UploadDir, MaxUploadBytes: cfg.MaxUploadBytes, SiteName: cfg.PublicSiteName}
+	svc := &service.Service{Store: store, UploadDir: cfg.UploadDir, MaxUploadBytes: cfg.MaxUploadBytes, SiteName: cfg.PublicSiteName, ReadOnly: cfg.ReadOnly}
 	_, api := cmsv1connect.NewCMSServiceHandler(svc)
 	admin := http.FileServer(http.Dir(cfg.WebRoot))
 	uploads := http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir)))
@@ -58,7 +64,7 @@ func main() {
 		log.Fatal("both TLS cert and key must be provided")
 	}
 	srv := &http.Server{Addr: cfg.Addr, Handler: secureHeaders(mux, cfg.CSPMode, cfg.HSTSEnabled, cfg.HSTSMaxAge, cfg.TrustProxyHeaders), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 4 * time.Minute, IdleTimeout: 120 * time.Second, MaxHeaderBytes: 1 << 20}
-	log.Printf("uvoo-minicms listening on %s db=%s uploads=%s web-root=%s tls=%t", cfg.Addr, cfg.DBPath, filepath.Clean(cfg.UploadDir), filepath.Clean(cfg.WebRoot), tlsEnabled)
+	log.Printf("uvoo-minicms listening on %s db=%s uploads=%s web-root=%s tls=%t read-only=%t", cfg.Addr, cfg.DBPath, filepath.Clean(cfg.UploadDir), filepath.Clean(cfg.WebRoot), tlsEnabled, cfg.ReadOnly)
 	if tlsEnabled {
 		log.Fatal(srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile))
 	}

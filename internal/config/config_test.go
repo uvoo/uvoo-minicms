@@ -87,6 +87,14 @@ func TestLoadReadsHSTSFlags(t *testing.T) {
 	}
 }
 
+func TestLoadReadsReadOnlyFromEnv(t *testing.T) {
+	t.Setenv("CMS_READ_ONLY", "true")
+	cfg := loadForTest(t)
+	if !cfg.ReadOnly {
+		t.Fatal("expected CMS_READ_ONLY=true to enable read-only mode")
+	}
+}
+
 func loadForTest(t *testing.T, args ...string) Config {
 	t.Helper()
 	oldCommandLine := flag.CommandLine

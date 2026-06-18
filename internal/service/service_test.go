@@ -70,6 +70,24 @@ func TestSetSiteImageOptimizesLogoAndFavicon(t *testing.T) {
 	}
 }
 
+func TestReadOnlyReplicaRejectsMutationsAndAllowsReads(t *testing.T) {
+	store, err := db.Open(t.TempDir() + "/cms.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	svc := &Service{Store: store, UploadDir: t.TempDir(), MaxUploadBytes: 2 << 20, SiteName: "Demo", ReadOnly: true}
+	ctx := context.Background()
+
+	if _, err := svc.GetSettings(ctx, connect.NewRequest(&structpb.Struct{})); err != nil {
+		t.Fatalf("read-only replica should allow reads: %v", err)
+	}
+	_, err = svc.SaveSettings(ctx, connect.NewRequest(&structpb.Struct{}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("expected read-only mutation to fail with FailedPrecondition, got %v", err)
+	}
+}
+
 func TestSetSiteImageRejectsLocalURLAndKeepsExternalSettingURL(t *testing.T) {
 	store, err := db.Open(t.TempDir() + "/cms.db")
 	if err != nil {

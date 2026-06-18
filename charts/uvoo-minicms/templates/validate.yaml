@@ -1,0 +1,11 @@
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.sqlite.allowUnsafeMultiReplica) -}}
+{{- fail "Uvoo-MiniCMS uses a single SQLite database file. Keep replicaCount=1, or set sqlite.allowUnsafeMultiReplica=true only if you have deliberately accepted the risks of concurrent SQLite access on shared storage." -}}
+{{- end -}}
+{{- if .Values.ha.enabled -}}
+{{- if not .Values.persistence.enabled -}}
+{{- fail "ha.enabled requires persistence.enabled=true so writer and reader pods share the same SQLite database and uploads." -}}
+{{- end -}}
+{{- if and (not .Values.persistence.existingClaim) (not (has "ReadWriteMany" .Values.persistence.accessModes)) (not .Values.sqlite.allowUnsafeMultiReplica) -}}
+{{- fail "ha.enabled requires a ReadWriteMany persistent volume, or an existingClaim known to support RWX. Set persistence.accessModes[0]=ReadWriteMany, use persistence.existingClaim, or explicitly set sqlite.allowUnsafeMultiReplica=true to bypass this guard." -}}
+{{- end -}}
+{{- end -}}
