@@ -43,6 +43,22 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          {{- if .Values.ha.enabled }}
+          - path: /cms.v1.CMSService
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "uvoo-minicms.writerServiceName" . }}
+                port:
+                  name: http
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "uvoo-minicms.writerServiceName" . }}
+                port:
+                  name: http
+          {{- end }}
           - path: {{ .Values.ingress.path | quote }}
             pathType: {{ .Values.ingress.pathType }}
             backend:

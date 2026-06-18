@@ -32,7 +32,7 @@ persistence:
 
 Do not set `replicaCount: 2` with the default PVC. A `ReadWriteOnce` volume can only attach to one node at a time, so Kubernetes may report `Multi-Attach error for volume ... Volume is already used by pod`.
 
-If you deliberately accept the risk, you can force multiple replicas only with storage that supports shared mounts and correct cross-node file locking, such as a tested `ReadWriteMany` filesystem:
+If you deliberately accept the risk, you can force multiple identical writable replicas only with storage that supports shared mounts and correct cross-node file locking, such as a tested `ReadWriteMany` filesystem:
 
 ```yaml
 replicaCount: 2
@@ -45,6 +45,29 @@ persistence:
 ```
 
 This is not recommended as an HA design for SQLite. Expect writer contention, and test page saves, uploads, imports, and admin changes under concurrent traffic before using it. For high availability without changing databases, prefer one application replica with reliable persistent storage, fast backups, and Kubernetes restarting the pod on failure.
+
+### Experimental public-read HA mode
+
+For a safer multi-pod shape without Postgres, enable `ha.enabled`. This creates:
+
+- one writer Deployment and writer-only Service
+- one or more read-only reader pods
+- public traffic routed to all pods
+- `/admin` and `/cms.v1.CMSService` routed only to the writer Service
+- `CMS_READ_ONLY=true` on reader pods so mutating API calls fail if a reader is reached directly
+
+Install it with a release name such as `uvoo-minicms-ha`:
+
+```bash
+helm upgrade --install uvoo-minicms-ha ./charts/uvoo-minicms \
+  --set ingress.host=cms.example.com \
+  --set ha.enabled=true \
+  --set ha.readerReplicaCount=2 \
+  --set persistence.accessModes[0]=ReadWriteMany \
+  --set persistence.storageClass=your-rwx-storage-class
+```
+
+This mode still requires shared `ReadWriteMany` storage for the SQLite database and uploads. It improves public-read availability during reader pod restarts, but the writer remains a single pod. Admin edits and imports are only as available as the writer pod and shared storage.
 
 ## TLS Options
 

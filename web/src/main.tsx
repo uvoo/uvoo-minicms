@@ -32,6 +32,9 @@ function joinPath(base:string, slug:string) {
 function freshPage() {
   return { slug:'', path:'', title:'', meta_description:'', content_type:'page', tags:'', markdown:'# Untitled\n', published:false, published_at:'' } as Page
 }
+function freshMenuItem() {
+  return { id:newID(), type:'link', parent_id:'', label:'', url:'/', external:false, enabled:true } as NavItem
+}
 function defaultFooter(siteName = 'Uvoo-MiniCMS') {
   return `© ${new Date().getUTCFullYear()} ${siteName}. All rights reserved.`
 }
@@ -59,6 +62,9 @@ function menuParentOptions(items: NavItem[], rowIndex: number) {
 function menuSearchValue(item?: NavItem) {
   if (!item) return ''
   return [item.label, item.url, item.id, item.parent_id, item.type].filter(Boolean).join(' ').toLowerCase()
+}
+function pageSearchValue(page: Page) {
+  return [page.title, page.slug, page.path, page.content_type, page.tags, page.meta_description].filter(Boolean).join(' ').toLowerCase()
 }
 function menuSortLabel(item: NavItem) {
   return (item.label || item.url || item.id || '').trim().toLocaleLowerCase()
@@ -206,6 +212,7 @@ function Root() {
   const [runningImport, setRunningImport] = useState(false)
   const [identityUploading, setIdentityUploading] = useState<IdentityKind | ''>('')
   const [identitySourceURL, setIdentitySourceURL] = useState<Record<IdentityKind, string>>({ logo: '', favicon: '' })
+  const [contentSearch, setContentSearch] = useState('')
   const [menuSearch, setMenuSearch] = useState('')
   const [form] = Form.useForm()
   const [settingsForm] = Form.useForm<SiteSettings>()
@@ -248,6 +255,8 @@ function Root() {
     '--admin-shadow': themeStyle === 'material' ? (adminDark ? '#00000070' : '#17203326') : (adminDark ? '#00000055' : '#17203312')
   } as React.CSSProperties
   const imageSuggestions = assets.filter(asset => isImage(asset.url)).map(asset => asset.url)
+  const contentSearchQuery = contentSearch.trim().toLowerCase()
+  const visiblePages = contentSearchQuery ? pages.filter(page => pageSearchValue(page).includes(contentSearchQuery)) : pages
   const menuSearchQuery = menuSearch.trim().toLowerCase()
 
   function setAdminThemeMode(mode: 'light'|'dark') {
@@ -686,7 +695,9 @@ function Root() {
         <Button block type="primary" onClick={() => newPage('page')}>New page</Button>
         <Button block onClick={() => newPage('post')}>New post</Button>
       </Space>
-      <List className="pages" dataSource={pages} renderItem={p => <List.Item className={active?.slug===p.slug?'selected':''} onClick={() => openPage(p.slug)}>
+      <Input.Search className="contentSearch" allowClear placeholder="Search pages and posts" value={contentSearch} onChange={e => setContentSearch(e.target.value)} />
+      <Typography.Text className="contentCount" type="secondary">{visiblePages.length} of {pages.length} content item(s)</Typography.Text>
+      <List className="pages" dataSource={visiblePages} locale={{ emptyText: contentSearchQuery ? 'No pages or posts match this search.' : 'No pages yet.' }} renderItem={p => <List.Item className={active?.slug===p.slug?'selected':''} onClick={() => openPage(p.slug)}>
         <List.Item.Meta title={p.title} description={`${p.path || `/${p.slug}`}${p.content_type === 'post' ? ' · post' : ''}${p.published ? '' : ' · draft'}`} />
       </List.Item>} />
     </Layout.Sider>
@@ -821,7 +832,7 @@ function Root() {
               <Space className="menuToolbar" wrap>
                 <Input allowClear placeholder="Search menu items" value={menuSearch} onChange={e => setMenuSearch(e.target.value)} />
                 <Button onClick={sortCurrentMenuAlphabetically}>Sort A-Z</Button>
-                <Button onClick={() => add({id:newID(), type:'link', parent_id:'', label:'', url:'/', external:false, enabled:true})}>Add menu item</Button>
+                <Button onClick={() => add(freshMenuItem())}>Add menu item</Button>
               </Space>
               {fields.filter(field => !menuSearchQuery || menuSearchValue(menuItems?.[field.name]).includes(menuSearchQuery)).map(field => <Space key={field.key} className="menuRow" align="start">
                 <Form.Item {...field} name={[field.name, 'id']} hidden><Input /></Form.Item>
@@ -853,6 +864,10 @@ function Root() {
                 </div>
               </Space>)}
               {menuSearchQuery && fields.every(field => !menuSearchValue(menuItems?.[field.name]).includes(menuSearchQuery)) && <Typography.Text type="secondary">No menu items match this search.</Typography.Text>}
+              <Space className="menuFooterActions" wrap>
+                <Button onClick={() => add(freshMenuItem())}>Add menu item</Button>
+                <Button onClick={sortCurrentMenuAlphabetically}>Sort A-Z</Button>
+              </Space>
             </>}</Form.List>
           </Form>
         </Card> },

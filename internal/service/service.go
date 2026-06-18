@@ -37,6 +37,7 @@ type Service struct {
 	UploadDir      string
 	MaxUploadBytes int64
 	SiteName       string
+	ReadOnly       bool
 }
 
 func ok(v map[string]any) (*connect.Response[structpb.Struct], error) {
@@ -79,6 +80,14 @@ func number(m map[string]any, k string) int {
 func (s *Service) Health(ctx context.Context, _ *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
 	return ok(map[string]any{"ok": true, "time": time.Now().UTC().Format(time.RFC3339)})
 }
+
+func (s *Service) requireWritable() error {
+	if s.ReadOnly {
+		return connect.NewError(connect.CodeFailedPrecondition, errors.New("this Uvoo-MiniCMS replica is read-only; send admin changes to the writer replica"))
+	}
+	return nil
+}
+
 func (s *Service) Session(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
 	username := auth.UserFromContext(ctx)
 	if username == "" {
@@ -197,6 +206,9 @@ func (s *Service) GetPage(ctx context.Context, req *connect.Request[structpb.Str
 	return ok(map[string]any{"page": pageMap(p, true)})
 }
 func (s *Service) SavePage(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	m := fields(req)
 	slug := cleanSlug(str(m, "slug"))
 	if slug == "" {
@@ -243,6 +255,9 @@ func (s *Service) ListPageRevisions(ctx context.Context, req *connect.Request[st
 	return ok(map[string]any{"revisions": items})
 }
 func (s *Service) DeletePage(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	if err := s.Store.DeletePage(ctx, str(fields(req), "slug")); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -256,6 +271,9 @@ func (s *Service) GetSettings(ctx context.Context, _ *connect.Request[structpb.S
 	return ok(map[string]any{"settings": settingsMap(settings)})
 }
 func (s *Service) SaveSettings(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	settings, err := settingsFromMap(fields(req), s.SiteName)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -289,6 +307,9 @@ func (s *Service) ListAssets(ctx context.Context, _ *connect.Request[structpb.St
 	return ok(map[string]any{"assets": items})
 }
 func (s *Service) DeleteAsset(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	id := int64(number(fields(req), "id"))
 	if id <= 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("asset id is required"))
@@ -329,6 +350,9 @@ func (s *Service) GetACL(ctx context.Context, _ *connect.Request[structpb.Struct
 	return ok(map[string]any{"acl": aclMap(settings, rules)})
 }
 func (s *Service) SaveACL(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	settings, rules, err := aclFromMap(fields(req))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -354,6 +378,9 @@ func (s *Service) ImportPreview(ctx context.Context, req *connect.Request[struct
 	return ok(map[string]any{"import": importResultMap(result)})
 }
 func (s *Service) ImportSite(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	opts := importOptions(fields(req))
@@ -375,6 +402,9 @@ func (s *Service) ImportSite(ctx context.Context, req *connect.Request[structpb.
 	return ok(map[string]any{"import": importResultMap(result)})
 }
 func (s *Service) UploadFile(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	m := fields(req)
 	name := safeName(str(m, "name"))
 	dataURL := str(m, "data")
@@ -406,6 +436,9 @@ func (s *Service) UploadFile(ctx context.Context, req *connect.Request[structpb.
 	return ok(map[string]any{"asset": assetMap(a)})
 }
 func (s *Service) SetSiteImage(ctx context.Context, req *connect.Request[structpb.Struct]) (*connect.Response[structpb.Struct], error) {
+	if err := s.requireWritable(); err != nil {
+		return nil, err
+	}
 	m := fields(req)
 	kind := strings.ToLower(str(m, "kind"))
 	if kind != "logo" && kind != "favicon" {

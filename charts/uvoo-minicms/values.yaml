@@ -9,6 +9,12 @@ sqlite:
   # with correct cross-node file locking and still risk writer contention.
   allowUnsafeMultiReplica: false
 
+ha:
+  # Experimental public-read HA mode. Creates one writable pod and
+  # readerReplicaCount read-only pods. Requires shared RWX storage.
+  enabled: false
+  readerReplicaCount: 1
+
 image:
   repository: ghcr.io/uvoo/uvoo-minicms
   pullPolicy: Always

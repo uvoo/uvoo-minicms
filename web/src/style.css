@@ -40,7 +40,16 @@ body,
 }
 
 .pages {
+  margin-top: 8px;
+}
+
+.contentSearch {
   margin-top: 18px;
+}
+
+.contentCount {
+  display: block;
+  margin-top: 8px;
 }
 
 .pages .ant-list-item {
@@ -205,6 +214,10 @@ body,
   display: grid;
   gap: 6px;
   justify-items: start;
+}
+
+.menuFooterActions {
+  margin-top: 8px;
 }
 
 .routeGrid .ant-form-item,

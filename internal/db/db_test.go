@@ -92,6 +92,31 @@ func TestGetSettingsCacheReturnsCopies(t *testing.T) {
 	}
 }
 
+func TestOpenReadOnlyAllowsReadsAndRejectsWrites(t *testing.T) {
+	ctx := context.Background()
+	path := t.TempDir() + "/cms.db"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetSettings(ctx, "Demo"); err != nil {
+		t.Fatal(err)
+	}
+	store.DB.Close()
+
+	readonly, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readonly.DB.Close()
+	if _, err := readonly.GetSettings(ctx, "Demo"); err != nil {
+		t.Fatalf("read-only store should allow reads: %v", err)
+	}
+	if _, err := readonly.SavePage(ctx, Page{Slug: "readonly", Path: "/readonly", Title: "Read Only"}); err == nil {
+		t.Fatal("expected read-only store to reject writes")
+	}
+}
+
 func TestDefaultSettingsUseDarkTheme(t *testing.T) {
 	settings := DefaultSettings("Demo")
 	if settings.AdminTheme != "dark" {

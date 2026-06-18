@@ -31,6 +31,7 @@ type Config struct {
 	PublicSiteName    string
 	TLSCertFile       string
 	TLSKeyFile        string
+	ReadOnly          bool
 }
 
 func Load() Config {
@@ -58,6 +59,7 @@ func Load() Config {
 		PublicSiteName:    env("CMS_SITE_NAME", "Uvoo-MiniCMS"),
 		TLSCertFile:       os.Getenv("CMS_TLS_CERT"),
 		TLSKeyFile:        os.Getenv("CMS_TLS_KEY"),
+		ReadOnly:          boolEnv("CMS_READ_ONLY", false),
 	}
 	allowCIDRs := strings.Join(cfg.AllowedCIDRs, ",")
 	denyCIDRs := strings.Join(cfg.DeniedCIDRs, ",")
