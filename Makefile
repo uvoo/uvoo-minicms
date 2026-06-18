@@ -1,10 +1,16 @@
-.PHONY: dev build license-check package package-linux release run web web-install docker-up docker-build docker-smoke docker-down
+.PHONY: dev build license-check package package-linux release run web web-audit web-audit-all web-install docker-up docker-build docker-smoke docker-down
 
 web:
 	cd web && npm ci && npm run build
 
 web-install:
 	cd web && npm ci
+
+web-audit:
+	cd web && npm audit --omit=dev --audit-level=high
+
+web-audit-all:
+	cd web && npm audit --audit-level=high
 
 build:
 	bash scripts/build.sh
@@ -18,7 +24,7 @@ package:
 package-linux:
 	bash scripts/package-linux.sh
 
-release:
+release: web-audit
 	bash scripts/release.sh
 
 run: build
