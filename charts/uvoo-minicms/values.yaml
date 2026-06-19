@@ -91,6 +91,8 @@ ingress:
   host: cms.example.com
   path: /
   pathType: Prefix
+  redirect:
+    fromToWWW: false
   tls:
     enabled: true
     secretName: ""

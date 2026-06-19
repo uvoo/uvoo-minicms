@@ -8,10 +8,13 @@ metadata:
   name: {{ include "uvoo-minicms.fullname" . }}
   labels:
     {{- include "uvoo-minicms.labels" . | nindent 4 }}
-  {{- if or .Values.ingress.annotations .Values.ingress.certManager.enabled }}
+  {{- if or .Values.ingress.annotations .Values.ingress.certManager.enabled .Values.ingress.redirect.fromToWWW }}
   annotations:
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ingress.redirect.fromToWWW }}
+    nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
     {{- end }}
     {{- if .Values.ingress.certManager.enabled }}
     {{- if .Values.ingress.certManager.clusterIssuer }}
@@ -37,6 +40,9 @@ spec:
   tls:
     - hosts:
         - {{ .Values.ingress.host | quote }}
+        {{- if .Values.ingress.redirect.fromToWWW }}
+        - {{ include "uvoo-minicms.ingressRedirectHost" . | quote }}
+        {{- end }}
       secretName: {{ include "uvoo-minicms.tlsSecretName" . }}
   {{- end }}
   rules:

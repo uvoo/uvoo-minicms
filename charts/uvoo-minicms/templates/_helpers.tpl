@@ -55,6 +55,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-tls" (include "uvoo-minicms.fullname" .)) .Values.ingress.tls.secretName -}}
 {{- end -}}
 
+{{- define "uvoo-minicms.ingressRedirectHost" -}}
+{{- if hasPrefix "www." .Values.ingress.host -}}
+{{- trimPrefix "www." .Values.ingress.host -}}
+{{- else -}}
+{{- printf "www.%s" .Values.ingress.host -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "uvoo-minicms.image" -}}
 {{- $tag := default .Chart.AppVersion .Values.image.tag -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}

@@ -112,4 +112,20 @@ ingress:
     clusterIssuer: letsencrypt-prod
 ```
 
+Redirect the bare domain to `www` with nginx Ingress:
+
+```yaml
+ingress:
+  host: www.example.com
+  redirect:
+    fromToWWW: true
+  tls:
+    enabled: true
+  certManager:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+```
+
+When `redirect.fromToWWW` is enabled, the chart adds the nginx `from-to-www-redirect` annotation and includes both `www.example.com` and `example.com` in the Ingress TLS hosts. Point DNS for both names at the Ingress controller. For HTTPS redirects, the certificate must cover both names.
+
 With Ingress enabled, `CMS_TRUST_PROXY_HEADERS` defaults to `true` so the app can correctly evaluate HTTPS, host, and client IP headers from nginx. Only use that behind a trusted proxy that strips and rewrites forwarded headers.
