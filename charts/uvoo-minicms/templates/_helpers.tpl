@@ -55,11 +55,27 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-tls" (include "uvoo-minicms.fullname" .)) .Values.ingress.tls.secretName -}}
 {{- end -}}
 
+{{- define "uvoo-minicms.gatewayName" -}}
+{{- default (printf "%s-gateway" (include "uvoo-minicms.fullname" .)) .Values.gateway.name -}}
+{{- end -}}
+
+{{- define "uvoo-minicms.gatewayTlsSecretName" -}}
+{{- default (printf "%s-tls" (include "uvoo-minicms.fullname" .)) .Values.gateway.tls.secretName -}}
+{{- end -}}
+
 {{- define "uvoo-minicms.ingressRedirectHost" -}}
 {{- if hasPrefix "www." .Values.ingress.host -}}
 {{- trimPrefix "www." .Values.ingress.host -}}
 {{- else -}}
 {{- printf "www.%s" .Values.ingress.host -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "uvoo-minicms.gatewayRedirectHost" -}}
+{{- if hasPrefix "www." .Values.gateway.host -}}
+{{- trimPrefix "www." .Values.gateway.host -}}
+{{- else -}}
+{{- printf "www.%s" .Values.gateway.host -}}
 {{- end -}}
 {{- end -}}
 
@@ -70,7 +86,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "uvoo-minicms.trustProxyHeaders" -}}
 {{- if eq (toString .Values.config.trustProxyHeaders) "" -}}
-{{- ternary "true" "false" .Values.ingress.enabled -}}
+{{- if or .Values.ingress.enabled .Values.gateway.enabled -}}true{{- else -}}false{{- end -}}
 {{- else -}}
 {{- .Values.config.trustProxyHeaders | toString -}}
 {{- end -}}

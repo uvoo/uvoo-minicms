@@ -1,6 +1,6 @@
 # Uvoo-MiniCMS Helm Chart
 
-This chart runs Uvoo-MiniCMS behind a Kubernetes Service and optional HTTPS Ingress. The default Ingress class is `nginx`.
+This chart runs Uvoo-MiniCMS behind a Kubernetes Service and optional HTTPS Ingress or Gateway API route. The default Ingress class is `nginx`.
 
 ## Install
 
@@ -129,3 +129,106 @@ ingress:
 When `redirect.fromToWWW` is enabled, the chart adds the nginx `from-to-www-redirect` annotation and includes both `www.example.com` and `example.com` in the Ingress TLS hosts. Point DNS for both names at the Ingress controller. For HTTPS redirects, the certificate must cover both names.
 
 With Ingress enabled, `CMS_TRUST_PROXY_HEADERS` defaults to `true` so the app can correctly evaluate HTTPS, host, and client IP headers from nginx. Only use that behind a trusted proxy that strips and rewrites forwarded headers.
+
+## Envoy Gateway
+
+To switch from ingress-nginx to Envoy Gateway, disable the Ingress and enable Gateway API resources:
+
+```yaml
+ingress:
+  enabled: false
+
+gateway:
+  enabled: true
+  create: true
+  className: eg
+  host: www.uvoo.io
+  listeners:
+    http:
+      enabled: true
+    https:
+      enabled: true
+      # Leave empty to allow both www.uvoo.io and uvoo.io redirect routes.
+      hostname: ""
+  redirect:
+    httpToHttps: true
+    fromToWWW: true
+  tls:
+    enabled: true
+    secretName: cms-uvoo-minicms-tls
+  certManager:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+```
+
+Apply it with Helm:
+
+```bash
+helm upgrade --install cms ./charts/uvoo-minicms \
+  --namespace uvoo-io \
+  --set ingress.enabled=false \
+  --set gateway.enabled=true \
+  --set gateway.className=eg \
+  --set gateway.host=www.uvoo.io \
+  --set gateway.redirect.fromToWWW=true \
+  --set gateway.tls.secretName=cms-uvoo-minicms-tls \
+  --set gateway.certManager.enabled=true \
+  --set gateway.certManager.clusterIssuer=letsencrypt-prod
+```
+
+If you want to reuse an existing manually created Gateway instead of letting this release create `cms-uvoo-minicms-gateway`, set:
+
+```yaml
+gateway:
+  create: false
+  name: uvoo-gateway
+```
+
+Then use `uvoo-gateway` in the `ClusterIssuer` `parentRefs`. The HTTPS listener hostname must either be empty or include every hostname used by attached routes. A listener hostname of `*.uvoo.io` matches `www.uvoo.io` but not the apex `uvoo.io`, so a bare-domain redirect route for `uvoo.io` will not attach.
+
+The chart creates a cert-manager `Certificate` directly in Gateway mode instead of relying on gateway-shim annotations. The referenced issuer must already exist:
+
+```bash
+kubectl get clusterissuer letsencrypt-prod
+```
+
+For ACME HTTP-01 through Gateway API, cert-manager must have Gateway API support enabled. With the upstream Helm chart that is:
+
+```bash
+helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+  --namespace cert-manager \
+  --set config.enableGatewayAPI=true
+kubectl rollout restart deployment cert-manager -n cert-manager
+```
+
+A matching production `ClusterIssuer` looks like this; set `email` before applying it:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: admin@example.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: cms-uvoo-minicms-gateway
+                namespace: uvoo-io
+                kind: Gateway
+```
+
+The Envoy data plane also needs an address. Verify the generated Envoy service receives an external IP, then point DNS for every Gateway hostname at that IP:
+
+```bash
+kubectl get gateway,httproute -n uvoo-io
+kubectl get svc -n envoy-gateway-system
+kubectl get certificate,certificaterequest,order,challenge -n uvoo-io
+```
+
+If the Envoy service stays `EXTERNAL-IP: <pending>`, fix the cluster LoadBalancer provider or configure Envoy Gateway service settings for your environment before moving DNS. With Gateway enabled, `CMS_TRUST_PROXY_HEADERS` defaults to `true` so the app can correctly evaluate HTTPS, host, and client IP headers from Envoy.

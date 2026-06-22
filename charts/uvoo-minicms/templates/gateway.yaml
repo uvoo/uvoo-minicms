@@ -1,0 +1,44 @@
+{{- if and .Values.gateway.enabled .Values.gateway.create }}
+{{- if not .Values.gateway.host }}
+{{- fail "gateway.host is required when gateway.enabled=true" }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "uvoo-minicms.gatewayName" . }}
+  labels:
+    {{- include "uvoo-minicms.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className | quote }}
+  listeners:
+    {{- if .Values.gateway.listeners.http.enabled }}
+    - name: http
+      port: {{ .Values.gateway.listeners.http.port }}
+      protocol: HTTP
+      {{- if .Values.gateway.listeners.http.hostname }}
+      hostname: {{ .Values.gateway.listeners.http.hostname | quote }}
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+    {{- if .Values.gateway.listeners.https.enabled }}
+    - name: https
+      port: {{ .Values.gateway.listeners.https.port }}
+      protocol: HTTPS
+      {{- if .Values.gateway.listeners.https.hostname }}
+      hostname: {{ .Values.gateway.listeners.https.hostname | quote }}
+      {{- end }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ include "uvoo-minicms.gatewayTlsSecretName" . }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end }}
