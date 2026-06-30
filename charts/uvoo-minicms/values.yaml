@@ -91,6 +91,42 @@ ingress:
   host: cms.example.com
   path: /
   pathType: Prefix
+  redirect:
+    fromToWWW: false
+  tls:
+    enabled: true
+    secretName: ""
+    crt: ""
+    key: ""
+  certManager:
+    enabled: false
+    clusterIssuer: letsencrypt-prod
+    issuer: ""
+    commonName: ""
+    duration: ""
+    renewBefore: ""
+
+gateway:
+  enabled: false
+  create: true
+  name: ""
+  className: eg
+  annotations: {}
+  host: cms.example.com
+  path: /
+  pathType: PathPrefix
+  listeners:
+    http:
+      enabled: true
+      port: 80
+      hostname: ""
+    https:
+      enabled: true
+      port: 443
+      hostname: ""
+  redirect:
+    httpToHttps: true
+    fromToWWW: false
   tls:
     enabled: true
     secretName: ""

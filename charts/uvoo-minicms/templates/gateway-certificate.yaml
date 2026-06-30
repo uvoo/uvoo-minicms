@@ -1,0 +1,36 @@
+{{- if and .Values.gateway.enabled .Values.gateway.tls.enabled .Values.gateway.certManager.enabled }}
+{{- if not .Values.gateway.host }}
+{{- fail "gateway.host is required when gateway.enabled=true" }}
+{{- end }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "uvoo-minicms.gatewayTlsSecretName" . }}
+  labels:
+    {{- include "uvoo-minicms.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "uvoo-minicms.gatewayTlsSecretName" . }}
+  dnsNames:
+    - {{ .Values.gateway.host | quote }}
+    {{- if .Values.gateway.redirect.fromToWWW }}
+    - {{ include "uvoo-minicms.gatewayRedirectHost" . | quote }}
+    {{- end }}
+  {{- if .Values.gateway.certManager.commonName }}
+  commonName: {{ .Values.gateway.certManager.commonName | quote }}
+  {{- end }}
+  {{- if .Values.gateway.certManager.duration }}
+  duration: {{ .Values.gateway.certManager.duration | quote }}
+  {{- end }}
+  {{- if .Values.gateway.certManager.renewBefore }}
+  renewBefore: {{ .Values.gateway.certManager.renewBefore | quote }}
+  {{- end }}
+  issuerRef:
+    {{- if .Values.gateway.certManager.clusterIssuer }}
+    kind: ClusterIssuer
+    name: {{ .Values.gateway.certManager.clusterIssuer | quote }}
+    {{- else }}
+    kind: Issuer
+    name: {{ .Values.gateway.certManager.issuer | quote }}
+    {{- end }}
+    group: cert-manager.io
+{{- end }}
