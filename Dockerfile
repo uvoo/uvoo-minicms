@@ -6,7 +6,7 @@ RUN npm ci
 COPY web ./
 RUN npm run build
 
-FROM golang:1.26-alpine AS go
+FROM golang:1.26.5-alpine AS go
 RUN apk add --no-cache build-base git
 WORKDIR /src
 COPY go.mod go.sum* ./
